@@ -554,8 +554,10 @@ section{
 <!-- order section ends -->
 <section class="footer" style="background-color: rgb(255, 255, 255)">
     <h1>Fertilizer Recommendation System...    Created by krushnakant bankar & Tejas Golhar.. </h1>
-    
 </section>
+
+<!-- scroll to top button -->
+<div id="scroll-top" class="fas fa-angle-up" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; width: 50px; height: 50px; background: var(--red); color: #fff; border-radius: 50%; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"></div>
 
     <script>
         
@@ -573,13 +575,27 @@ window.onscroll = () =>{
     menu.classList.remove('fa-times');
     navbar.classList.remove('active');
   
-    if(window.scrollY > 60){
-      document.querySelector('#scroll-top').classList.add('active');
-    }else{
-      document.querySelector('#scroll-top').classList.remove('active');
+    // Check if scroll-top element exists before accessing it
+    const scrollTop = document.querySelector('#scroll-top');
+    if(scrollTop) {
+      if(window.scrollY > 60){
+        scrollTop.style.display = 'flex';
+      }else{
+        scrollTop.style.display = 'none';
+      }
     }
   
   }
+
+  // Add click handler for scroll to top button
+  document.addEventListener('DOMContentLoaded', function() {
+    const scrollTop = document.querySelector('#scroll-top');
+    if(scrollTop) {
+      scrollTop.addEventListener('click', function() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+  });
   
     </script>
 </body>
