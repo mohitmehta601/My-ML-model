@@ -6,37 +6,37 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 
-def _get_openai_client():
+def _get_gemini_client():
     # Lazy import to avoid dependency at training time
     try:
-        from openai import OpenAI  # type: ignore
+        import google.generativeai as genai  # type: ignore
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
-            "openai package is required. Install dependencies from requirements.txt"
+            "google-generativeai package is required. Install dependencies from requirements.txt"
         ) from e
 
     load_dotenv(override=False)
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY is not set. Export it or add to a .env file."
+            "GEMINI_API_KEY is not set. Export it or add to a .env file."
         )
 
-    # The OpenAI client reads the env var automatically
-    client = OpenAI()
-    return client
+    # Configure the Gemini API
+    genai.configure(api_key=api_key)
+    return genai
 
 
 def generate_recommendation_report(
     base_inputs: Dict[str, Any], predictions: Dict[str, Any], confidences: Dict[str, float]
 ) -> Dict[str, Any]:
     """
-    Call the OpenAI API to transform raw predictions into a user-facing, structured
+    Call the Gemini API to transform raw predictions into a user-facing, structured
     recommendation similar to the provided screenshot.
     Returns a dict (JSON-compatible) ready to render.
     """
 
-    client = _get_openai_client()
+    genai = _get_gemini_client()
 
     # Compute a representative confidence from Primary_Fertilizer if present
     primary_conf = confidences.get("Primary_Fertilizer", None)
@@ -49,7 +49,7 @@ def generate_recommendation_report(
     field_size = base_inputs.get("Field_Size")
     field_unit = base_inputs.get("Field_Unit", "hectares")
 
-    system = (
+    system_prompt = (
         "You are an agronomy assistant. Convert soil/crop + ML outputs into a clear,\n"
         "practical fertilizer recommendation. Return only JSON and keep values realistic.\n"
         "When estimating amounts and costs, scale by field size."
@@ -137,31 +137,49 @@ def generate_recommendation_report(
         ),
     }
 
-    messages = [
-        {"role": "system", "content": system},
-        {
-            "role": "user",
-            "content": (
-                "Generate a structured agronomy report as JSON (no extra text).\n"
-                + json.dumps(user_payload)
-            ),
-        },
-    ]
-
-    # Use a reasonably priced, capable model
-    result = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=0.4,
-        response_format={"type": "json_object"},
+    full_prompt = (
+        f"{system_prompt}\n\n"
+        "Generate a structured agronomy report as JSON (no extra text).\n"
+        + json.dumps(user_payload)
     )
 
-    content = result.choices[0].message.content
+    # Use Gemini Flash model (good balance of performance and cost)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # Configure generation parameters
+    generation_config = genai.types.GenerationConfig(
+        temperature=0.4,
+        candidate_count=1,
+    )
+
     try:
-        data = json.loads(content)
-    except Exception:
-        # Fallback: wrap content
-        data = {"raw": content}
+        response = model.generate_content(
+            full_prompt,
+            generation_config=generation_config
+        )
+        
+        content = response.text
+        
+        # Try to parse the JSON response
+        try:
+            data = json.loads(content)
+        except Exception:
+            # If JSON parsing fails, try to extract JSON from the response
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                try:
+                    data = json.loads(json_match.group())
+                except Exception:
+                    # Fallback: wrap content
+                    data = {"raw": content}
+            else:
+                # Fallback: wrap content
+                data = {"raw": content}
+
+    except Exception as e:
+        # Fallback response in case of API error
+        data = {"error": f"Failed to generate recommendation: {str(e)}"}
 
     # Attach some context for rendering
     data["_meta"] = {

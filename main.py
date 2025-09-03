@@ -152,12 +152,12 @@ def predict():
                 print(f"LLM generation failed: {error_str}")
                 
                 # Provide specific error messages for common issues
-                if "insufficient_quota" in error_str or "429" in error_str:
-                    user_error = "OpenAI API quota exceeded. Please check your billing or upgrade your plan."
-                elif "OPENAI_API_KEY" in error_str:
-                    user_error = "OpenAI API key not configured properly."
-                elif "openai package" in error_str:
-                    user_error = "OpenAI package not installed properly."
+                if "insufficient_quota" in error_str or "429" in error_str or "quota" in error_str.lower():
+                    user_error = "Gemini API quota exceeded. Please check your billing or upgrade your plan."
+                elif "GEMINI_API_KEY" in error_str:
+                    user_error = "Gemini API key not configured properly."
+                elif "google-generativeai package" in error_str:
+                    user_error = "Google Generative AI package not installed properly."
                 else:
                     user_error = "Advanced report temporarily unavailable."
                 
