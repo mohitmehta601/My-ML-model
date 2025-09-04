@@ -1,0 +1,19 @@
+{
+  "prices": {
+    "Urea": 43,
+    "DAP": 155,
+    "MOP": 36,
+    "SOP": 52,
+    "Calcium Ammonium Nitrate": 32,
+    "Ammonium Sulphate": 24,
+    "Vermicompost": 14,
+    "Neem Cake": 28,
+    "Bone Meal": 20,
+    "Compost": 7,
+    "Poultry manure": 9,
+    "Wood Ash": 4
+  },
+  "currency": "₹",
+  "region": "India",
+  "updated_at": "2025-09-04"
+}
