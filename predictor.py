@@ -5,7 +5,9 @@ import joblib
 import numpy as np
 import pandas as pd
 
-MODEL_PATH = os.path.join("models", "fertilizer_recommender.pkl")
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(SCRIPT_DIR, "models", "fertilizer_recommender.pkl")
 
 
 class FertilizerRecommender:

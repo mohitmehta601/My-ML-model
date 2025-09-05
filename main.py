@@ -127,59 +127,62 @@ def predict():
     except Exception as e:
         return render_template("Model1.html", error=str(e))
 
-    # If sowing date and field size provided, try to generate full LLM report
-    if sowing_date and field_size is not None:
-        base_inputs = {
-            **features,
-            "Sowing_Date": sowing_date,
-            "Field_Size": field_size,
-            "Field_Unit": field_unit,
-        }
-        
-        # Check if LLM should be disabled via environment variable or user choice
-        disable_llm = os.getenv("DISABLE_LLM", "false").lower() == "true" or skip_llm
-        
-        if not disable_llm:
-            try:
-                report = generate_recommendation_report(base_inputs, preds, confs)
-                return render_template(
-                    "result.html",
-                    report=report,
-                )
-            except Exception as e:
-                # Log the error but continue with fallback
-                error_str = str(e)
-                print(f"LLM generation failed: {error_str}")
-                
-                # Provide specific error messages for common issues
-                if "insufficient_quota" in error_str or "429" in error_str or "quota" in error_str.lower():
-                    user_error = "Gemini API quota exceeded. Please check your billing or upgrade your plan."
-                elif "GEMINI_API_KEY" in error_str:
-                    user_error = "Gemini API key not configured properly."
-                elif "google-generativeai package" in error_str:
-                    user_error = "Google Generative AI package not installed properly."
-                else:
-                    user_error = "Advanced report temporarily unavailable."
-                
-                # Fall back to enhanced predictions view with extra info
-                return render_template(
-                    "Model1.html",
-                    predictions=preds,
-                    confidences=confs,
-                    base_inputs=base_inputs,
-                    llm_error=user_error,
-                    show_basic_report=True
-                )
-        else:
-            # LLM disabled, show enhanced predictions
+    # Prepare base inputs for LLM (use defaults if optional fields not provided)
+    base_inputs = {
+        **features,
+        "Sowing_Date": sowing_date or "2024-01-01",  # Default sowing date
+        "Field_Size": field_size if field_size is not None else 1.0,  # Default 1 hectare
+        "Field_Unit": field_unit or "hectares",
+    }
+    
+    # Check if LLM should be disabled via environment variable or user choice
+    disable_llm = os.getenv("DISABLE_LLM", "false").lower() == "true" or skip_llm
+    
+    # Try to generate LLM-enhanced report (always attempt unless explicitly disabled)
+    if not disable_llm:
+        try:
+            print(f"Generating LLM report with ML predictions: {preds}")
+            report = generate_recommendation_report(base_inputs, preds, confs)
+            return render_template(
+                "result.html",
+                report=report,
+                raw_predictions=preds,
+                raw_confidences=confs,
+            )
+        except Exception as e:
+            # Log the error but continue with fallback
+            error_str = str(e)
+            print(f"LLM generation failed: {error_str}")
+            
+            # Provide specific error messages for common issues
+            if "insufficient_quota" in error_str or "429" in error_str or "quota" in error_str.lower():
+                user_error = "Gemini API quota exceeded. Please check your billing or upgrade your plan."
+            elif "GEMINI_API_KEY" in error_str:
+                user_error = "Gemini API key not configured properly. Set GEMINI_API_KEY environment variable."
+            elif "google-generativeai package" in error_str:
+                user_error = "Google Generative AI package not installed properly."
+            else:
+                user_error = f"Advanced report temporarily unavailable: {error_str}"
+            
+            # Fall back to enhanced predictions view with extra info
             return render_template(
                 "Model1.html",
                 predictions=preds,
                 confidences=confs,
                 base_inputs=base_inputs,
-                llm_error="AI report skipped by user choice." if skip_llm else "AI report disabled in configuration.",
+                llm_error=user_error,
                 show_basic_report=True
             )
+    else:
+        # LLM disabled, show enhanced predictions
+        return render_template(
+            "Model1.html",
+            predictions=preds,
+            confidences=confs,
+            base_inputs=base_inputs,
+            llm_error="AI report skipped by user choice." if skip_llm else "AI report disabled in configuration.",
+            show_basic_report=True
+        )
 
     # Otherwise render predictions only
     return render_template("Model1.html", predictions=preds, confidences=confs)

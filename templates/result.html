@@ -132,18 +132,40 @@
             {% if report.cost_estimate %}
               <div class="kv">
                 <div class="muted">Primary Fertilizer</div>
-                <div>₹ {{ report.cost_estimate.primary }}</div>
+                <div>{{ report.cost_estimate.primary or '₹0' }}</div>
                 <div class="muted">Secondary Fertilizer</div>
-                <div>₹ {{ report.cost_estimate.secondary }}</div>
+                <div>{{ report.cost_estimate.secondary or '₹0' }}</div>
                 <div class="muted">Organic Options</div>
-                <div>₹ {{ report.cost_estimate.organics }}</div>
-                <div class="muted">Total</div>
-                <div><strong>₹ {{ report.cost_estimate.total }}</strong></div>
+                <div>{{ report.cost_estimate.organics or '₹0' }}</div>
+                <div class="muted"><strong>Total Cost</strong></div>
+                <div><strong>{{ report.cost_estimate.total or '₹0' }}</strong></div>
                 <div class="muted">Notes</div>
-                <div>{{ report.cost_estimate.notes }}</div>
+                <div style="font-size: 12px;">{{ report.cost_estimate.notes }}</div>
               </div>
+              {% if report.cost_estimate.breakdown %}
+              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                <div class="sub" style="margin-bottom: 8px;">Cost Breakdown Details</div>
+                <div style="font-size: 12px;">
+                  <div><strong>Primary:</strong> {{ report.cost_estimate.breakdown.primary_details.fertilizer }} 
+                    ({{ report.cost_estimate.breakdown.primary_details.amount_kg }}kg × {{ report.cost_estimate.breakdown.primary_details.price_per_kg }})</div>
+                  <div><strong>Secondary:</strong> {{ report.cost_estimate.breakdown.secondary_details.fertilizer }} 
+                    ({{ report.cost_estimate.breakdown.secondary_details.amount_kg }}kg × {{ report.cost_estimate.breakdown.secondary_details.price_per_kg }})</div>
+                  <div><strong>Organics:</strong> {{ report.cost_estimate.breakdown.organics_details.options_count }} option(s), 
+                    {{ report.cost_estimate.breakdown.organics_details.total_amount_kg }}kg total</div>
+                </div>
+              </div>
+              {% endif %}
             {% else %}
-              <div class="muted">—</div>
+              <div class="kv">
+                <div class="muted">Primary Fertilizer</div>
+                <div>₹0</div>
+                <div class="muted">Secondary Fertilizer</div>
+                <div>₹0</div>
+                <div class="muted">Organic Options</div>
+                <div>₹0</div>
+                <div class="muted"><strong>Total Cost</strong></div>
+                <div><strong>₹0</strong></div>
+              </div>
             {% endif %}
           </div>
         </div>

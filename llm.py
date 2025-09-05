@@ -61,24 +61,56 @@ FERTILIZER_NPK: Dict[str, str] = {
 
 # If rate_table.json not present, use these ₹/kg example prices as a fallback.
 # Replace with your region’s baseline; live prices override these.
+from typing import Dict
+
 RATE_TABLE_DEFAULT: Dict[str, float] = {
-    "Urea": 40.0,
+    # --- Primary Fertilizers ---
+    "Urea": 40.0,                       # ₹/kg
     "DAP": 150.0,
     "MOP": 33.0,
     "SOP": 50.0,
+    "SSP": 25.0,
+    "TSP": 45.0,
     "Ammonium Sulphate": 24.0,
-    "Potassium sulfate": 50.0,
+    "Ammonium Nitrate": 32.0,
+    "Ammonium Chloride": 28.0,
     "Calcium Ammonium Nitrate": 30.0,
+    "Rock Phosphate": 20.0,
+    "Potassium sulfate": 50.0,
 
-    # Organics—sold often by 50 kg bags; give per-kg equivalent
+    # --- Secondary / Biofertilizers ---
+    "PSB": 15.0,
+    "Rhizobium": 15.0,
+    "Azospirillum": 15.0,
+    "Azotobacter": 15.0,
+    "Azolla": 10.0,
+
+    # --- Organic Fertilizers ---
     "Vermicompost": 12.0,
-    "Neem Cake": 25.0,
-    "Bone Meal": 18.0,
     "Compost": 6.0,
+    "FYM": 5.0,                        # Farmyard manure
+    "Green manure": 7.0,
+    "Neem cake": 25.0,
+    "Mustard cake": 20.0,
+    "Bone meal": 18.0,
     "Poultry manure": 8.0,
+    "Banana wastes": 5.0,
+    "Banana peel compost": 6.0,
+    "Mulch": 2.0,
     "Wood Ash": 3.0,
-}
 
+    # --- Advisory Placeholders (non-materials, keep 0) ---
+    "Balanced NPK (maintenance)": 0.0,
+    "Split N doses": 0.0,
+    "Stop P": 0.0,
+    "Stop K": 0.0,
+    "Reduce N": 0.0,
+    "Avoid N": 0.0,
+    "Avoid Potash": 0.0,
+    "Avoid Phosphate application": 0.0,
+    "None": 0.0,
+    "—": 0.0
+}
 
 def _load_local_rate_table(path: str = "app/rate_table.json") -> Dict[str, float]:
     """Load local fallback prices if available."""
@@ -145,10 +177,12 @@ def _resolve_price(
     
     return None
 
-def _fmt_money(val: Optional[float], currency: str = "₹") -> Optional[str]:
-    """Format monetary value with currency symbol."""
-    if val is None: 
-        return None
+def _fmt_money(val: Optional[float], currency: str = "₹", show_zero: bool = True) -> str:
+    """Format monetary value with currency symbol, always return a string."""
+    if val is None:
+        return f"{currency}0" if show_zero else "N/A"
+    if val == 0.0:
+        return f"{currency}0" if show_zero else "N/A"
     return f"{currency}{int(round(val)):,}"
 
 
@@ -261,6 +295,10 @@ def generate_recommendation_report(
     - Prices come from `price_provider(name, region)` (if given), else local rate table.
     - Text phrasing can optionally be refined by Gemini (set use_gemini_for_text=True).
     """
+    print(f"🔬 Generating LLM report from ML predictions:")
+    print(f"   Predictions: {predictions}")
+    print(f"   Confidences: {confidences}")
+    print(f"   Base inputs: {base_inputs}")
 
     # ---------- Inputs ----------
     sowing_date = base_inputs.get("Sowing_Date")  # ISO date preferred
@@ -286,6 +324,11 @@ def generate_recommendation_report(
 
     primary_name = predictions.get("Primary_Fertilizer")
     secondary_name = predictions.get("Secondary_Fertilizer")
+
+    print(f"🌱 ML Model Analysis:")
+    print(f"   Primary Fertilizer: {primary_name}")
+    print(f"   Secondary Fertilizer: {secondary_name}")
+    print(f"   Nutrient Status - N: {n_status}, P: {p_status}, K: {k_status}")
 
     organics: List[str] = []
     for key in ("Organic_1", "Organic_2", "Organic_3"):
@@ -350,14 +393,20 @@ def generate_recommendation_report(
         if cost is None:
             organics_all_priced = False
 
-    primary_cost = (primary_amount * primary_price) if (primary_price is not None) else None
-    secondary_cost = (secondary_amount * secondary_price) if (secondary_price is not None) else None
-    organics_cost = sum([c for c in organics_cost_values if c is not None], 0.0) if organics_all_priced else None
+    # Ensure all three categories always have cost values (never None)
+    primary_cost = (primary_amount * primary_price) if (primary_price is not None and primary_amount > 0) else 0.0
+    secondary_cost = (secondary_amount * secondary_price) if (secondary_price is not None and secondary_amount > 0) else 0.0
+    
+    # For organics, if no organics are recommended, set cost to 0.0
+    if not organics_blocks:
+        organics_cost = 0.0
+    else:
+        # If some organic costs are available, use partial sum; if none available, use 0.0
+        available_costs = [c for c in organics_cost_values if c is not None]
+        organics_cost = sum(available_costs, 0.0) if available_costs else 0.0
 
-    total_cost = None
-    parts = [primary_cost, secondary_cost, (organics_cost if organics_blocks else 0.0)]
-    if all(x is not None for x in parts):
-        total_cost = float(parts[0] or 0) + float(parts[1] or 0) + float(parts[2] or 0)
+    # Total cost is always calculable since all components are now numeric
+    total_cost = primary_cost + secondary_cost + organics_cost
 
     # ---------- Soil analysis & notes ----------
     nutrient_deficiencies = []
@@ -382,6 +431,34 @@ def generate_recommendation_report(
     # ---------- Application timing ----------
     timing = _application_timing_text(sowing_date)
 
+    # ---------- Validation: Ensure all categories have meaningful content ----------
+    # If ML model didn't predict any fertilizers, provide default recommendations with zero costs
+    if not primary_name:
+        primary_name = "No primary fertilizer recommended"
+        primary_amount = 0
+        primary_cost = 0.0
+        primary_reason = "Based on soil analysis, current nutrient levels appear sufficient for primary fertilization."
+    
+    if not secondary_name:
+        secondary_name = "No secondary fertilizer recommended"
+        secondary_amount = 0
+        secondary_cost = 0.0
+        secondary_reason = "Soil nutrient levels indicate no additional secondary fertilization needed at this time."
+    
+    if not organics_blocks:
+        # Add a default organic recommendation even if ML didn't suggest any
+        organics_blocks = [{
+            "name": "Compost (optional)",
+            "amount_kg": int(_scaled_amount_kg("Compost", field_size, 0.0)),
+            "reason": "General soil health improvement",
+            "timing": "Apply as needed for long-term soil health benefits."
+        }]
+        # Recalculate organics cost with the default option
+        default_organic_price = _resolve_price("Compost", effective_region, price_provider, local_table)
+        organics_cost = (organics_blocks[0]["amount_kg"] * default_organic_price) if default_organic_price else 0.0
+        # Recalculate total
+        total_cost = primary_cost + secondary_cost + organics_cost
+
     # ---------- Confidence ----------
     # Use Primary_Fertilizer confidence if provided else average of all
     pri_conf = confidences.get("Primary_Fertilizer")
@@ -389,9 +466,41 @@ def generate_recommendation_report(
         pri_conf = sum(confidences.values()) / max(len(confidences), 1)
     confidence_percent = round(float(pri_conf) * 100) if pri_conf is not None else None
 
-    # ---------- Friendly reasons ----------
-    primary_reason = "Selected as primary nutrient source based on soil status and crop need."
-    secondary_reason = "Selected to correct specific deficiency and improve yield quality."
+    # ---------- Friendly reasons (with ML-aware explanations) ----------
+    def generate_smart_reason(fertilizer_name: str, nutrient_status: str, is_primary: bool = True) -> str:
+        """Generate intelligent explanations based on ML predictions."""
+        if not fertilizer_name:
+            return "No fertilizer recommended by the model."
+        
+        role = "primary" if is_primary else "secondary"
+        status_info = ""
+        
+        # Add nutrient status context
+        if nutrient_status:
+            if nutrient_status.lower() == "low":
+                status_info = f"ML model detected low {nutrient_status.split('_')[0]} levels, "
+            elif nutrient_status.lower() == "high":
+                status_info = f"ML model detected high {nutrient_status.split('_')[0]} levels, "
+            else:
+                status_info = f"ML model detected optimal {nutrient_status.split('_')[0]} levels, "
+        
+        base_reason = f"Selected as {role} fertilizer based on soil analysis and crop requirements. "
+        
+        # Add fertilizer-specific guidance
+        fert_lower = fertilizer_name.lower()
+        if fert_lower in {"urea", "calcium ammonium nitrate", "ammonium sulphate"}:
+            specific = "Provides essential nitrogen for vegetative growth and protein synthesis."
+        elif fert_lower in {"dap"}:
+            specific = "Supplies both nitrogen and phosphorus for root development and early growth."
+        elif fert_lower in {"mop", "sop", "potassium sulfate"}:
+            specific = "Enhances fruit quality, disease resistance, and water use efficiency."
+        else:
+            specific = "Provides balanced nutrition according to soil test recommendations."
+        
+        return status_info + base_reason + specific
+
+    primary_reason = generate_smart_reason(primary_name, n_status, True)
+    secondary_reason = generate_smart_reason(secondary_name, k_status, False)
 
     # Optionally let Gemini polish the one-liners (never prices/amounts).
     if use_gemini_for_text:
@@ -450,11 +559,31 @@ def generate_recommendation_report(
         "cost_estimate": {
             "primary": _fmt_money(primary_cost, currency),
             "secondary": _fmt_money(secondary_cost, currency),
-            "organics": _fmt_money(organics_cost, currency) if organics_blocks else _fmt_money(0.0, currency),
+            "organics": _fmt_money(organics_cost, currency),
             "total": _fmt_money(total_cost, currency),
             "notes": f"For {field_size} {field_unit}"
                      + (f" in {effective_region}" if effective_region else "")
-                     + ". Prices fetched from live provider when available; fallback to local rate table.",
+                     + ". Prices fetched from live provider when available; fallback to local rate table."
+                     + " All three categories (Primary, Secondary, Organic) are always included for complete cost analysis.",
+            "breakdown": {
+                "primary_details": {
+                    "fertilizer": primary_name or "Not recommended",
+                    "amount_kg": primary_amount,
+                    "price_per_kg": _fmt_money(primary_price, currency) if primary_price else "N/A",
+                    "cost": _fmt_money(primary_cost, currency)
+                },
+                "secondary_details": {
+                    "fertilizer": secondary_name or "Not recommended", 
+                    "amount_kg": secondary_amount,
+                    "price_per_kg": _fmt_money(secondary_price, currency) if secondary_price else "N/A",
+                    "cost": _fmt_money(secondary_cost, currency)
+                },
+                "organics_details": {
+                    "options_count": len(organics_blocks),
+                    "total_amount_kg": sum(block["amount_kg"] for block in organics_blocks),
+                    "cost": _fmt_money(organics_cost, currency)
+                }
+            }
         },
         "_meta": {
             "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -466,4 +595,13 @@ def generate_recommendation_report(
             "price_source": "live->fallback",
         },
     }
+    
+    print(f"🎯 Generated LLM-Enhanced Report:")
+    print(f"   Primary: {data['primary_fertilizer']['name']} ({data['primary_fertilizer']['amount_kg']}kg) - {data['cost_estimate']['primary']}")
+    print(f"   Secondary: {data['secondary_fertilizer']['name']} ({data['secondary_fertilizer']['amount_kg']}kg) - {data['cost_estimate']['secondary']}")
+    print(f"   Organics: {len(organics_blocks)} option(s) - {data['cost_estimate']['organics']}")
+    print(f"   Confidence: {confidence_percent}%")
+    print(f"   Total Cost: {data['cost_estimate']['total']}")
+    print(f"   All three categories guaranteed: ✓")
+    
     return data

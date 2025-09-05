@@ -10,6 +10,9 @@ FERT_ALIAS = {
     "ammonium sulphate": "Ammonium Sulphate", "ammonium sulfate": "Ammonium Sulphate",
     "vermicompost": "Vermicompost", "neem cake": "Neem Cake", "bone meal": "Bone Meal",
     "compost": "Compost", "poultry manure": "Poultry manure", "wood ash": "Wood Ash",
+    # Secondary/Biofertilizers
+    "psb": "PSB", "phosphate solubilizing bacteria": "PSB",
+    "rhizobium": "Rhizobium", "azospirillum": "Azospirillum", "azotobacter": "Azotobacter",
 }
 
 def normalize_name(name: Optional[str]) -> Optional[str]:
